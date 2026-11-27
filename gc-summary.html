@@ -1,0 +1,58 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Secondary GC outcomes</title><style>*{box-sizing:border-box}body{margin:0;background:#E9E7E6;font-family:Arial,sans-serif;color:#222}main{max-width:1800px;margin:auto;padding:12px}canvas{width:100%;height:auto;display:block;background:white}nav,.controls{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}button{padding:8px 12px;border:1px solid #777;border-radius:4px;background:white;color:#222;cursor:pointer}button[aria-pressed=true]{background:#333;color:white}input{flex:1;min-width:100px}button:focus-visible{outline:3px solid #007d71}#time{font-size:14px;align-self:center}</style></head><body><main><nav aria-label="Animation stages"><button data-stage>Primary selection</button><button data-stage>Contralateral</button><button data-stage>Ipsilateral homologous</button><button data-stage>Ipsilateral heterologous</button></nav><canvas id="scene" width="3840" height="2160" aria-label="Animated schematic of primary and secondary germinal centers"></canvas><div class="controls"><button id="play">Play</button><button id="restart">Restart</button><input id="seek" type="range" min="0" max="41.999" step="0.05" value="0" aria-label="Animation time"><span id="time"></span><button id="fullscreen">Full screen</button></div></main><script>const rawContext=document.getElementById('scene').getContext('2d');rawContext.scale(2,2);
+const spec={"width": 1920, "height": 1080, "duration": 42, "colors": {"naive": "#D1D4D5", "primary": "#D45170", "memory": "#D45170", "selected": "#EEA9B4", "burst": "#BE0B47", "variantPrimary": "#A600B5", "variantNaive": "#D9F1F8", "blue": "#007CAD"}, "stages": [{"start": 0, "end": 9, "name": "Primary selection", "description": "Na\u00efve B cells seed a primary GC and generate memory B cells."}, {"start": 9, "end": 20, "name": "Contralateral boost", "description": "A new GC forms mainly from na\u00efve B cells, with a memory-derived contribution."}, {"start": 20, "end": 31, "name": "Ipsilateral homologous boost", "description": "The ongoing primary GC expands, with limited na\u00efve B-cell recruitment."}, {"start": 31, "end": 42, "name": "Ipsilateral heterologous boost", "description": "Primary GC lineages persist alongside newly recruited variant-reactive B cells."}]};
+const canvas=document.getElementById('scene'),ctx=canvas.getContext('2d');
+function clamp(x){return Math.max(0,Math.min(1,x))}function ease(x){x=clamp(x);return x*x*(3-2*x)}function mix(a,b,t){return a+(b-a)*t}function rgb(hex){return [1,3,5].map(i=>parseInt(hex.slice(i,i+2),16))}function color(a,b,t){const A=rgb(a),B=rgb(b);return '#'+A.map((v,i)=>Math.round(mix(v,B[i],t)).toString(16).padStart(2,'0')).join('')}
+function cell(x,y,r,fill,receptor=false,alpha=1){ctx.save();ctx.globalAlpha=alpha;ctx.fillStyle=fill;ctx.strokeStyle='#555';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();ctx.stroke();if(receptor){ctx.strokeStyle='#555';ctx.lineWidth=r*.24;ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();ctx.moveTo(x+r*.18,y-r*.48);ctx.lineTo(x+r*.43,y-r*1.1);ctx.lineTo(x+r*.41,y-r*1.55);ctx.moveTo(x+r*.43,y-r*1.1);ctx.lineTo(x+r*.98,y-r*1.3);ctx.stroke();ctx.strokeStyle=fill;ctx.lineWidth=r*.17;ctx.stroke()}ctx.restore()}
+function text(s,x,y,size=28,fill='#222',align='left'){ctx.fillStyle=fill;ctx.font=size+'px Arial';ctx.textAlign=align;ctx.fillText(s,x,y)}
+function arrow(x1,y1,x2,y2,alpha=1){ctx.save();ctx.globalAlpha=alpha;ctx.strokeStyle='#666';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();const a=Math.atan2(y2-y1,x2-x1);ctx.beginPath();ctx.moveTo(x2,y2);ctx.lineTo(x2-16*Math.cos(a-.45),y2-16*Math.sin(a-.45));ctx.lineTo(x2-16*Math.cos(a+.45),y2-16*Math.sin(a+.45));ctx.closePath();ctx.fillStyle='#666';ctx.fill();ctx.restore()}
+function syringe(x,y,fill){ctx.save();ctx.translate(x,y);ctx.rotate(-Math.PI/4);ctx.strokeStyle='#666';ctx.lineWidth=1.5;ctx.fillStyle='white';ctx.fillRect(-11,-46,22,74);ctx.strokeRect(-11,-46,22,74);ctx.fillStyle=fill;ctx.fillRect(-10,-8,20,35);ctx.beginPath();ctx.moveTo(0,-46);ctx.lineTo(0,-72);ctx.moveTo(-16,-72);ctx.lineTo(16,-72);ctx.moveTo(0,28);ctx.lineTo(0,66);ctx.stroke();ctx.restore()}
+function grid(n,x,y,step){return Array.from({length:n},(_,i)=>[x+(i%Math.sqrt(n)-(Math.sqrt(n)-1)/2)*step,y+(Math.floor(i/Math.sqrt(n))-(Math.sqrt(n)-1)/2)*step])}
+const primary=grid(9,620,570,65),secondary=grid(16,1400,570,66),pool=[[180,300],[180,420],[180,540]],selectedNaive=[180,740],variantNaive=[180,740],mem=[[870,280],[950,280],[1030,280]];
+function centroid(points){return [points.reduce((s,p)=>s+p[0],0)/points.length,points.reduce((s,p)=>s+p[1],0)/points.length]}
+// The colony travels along a straight line while successive binary divisions
+// separate daughter cells into their final positions. No cells fade into existence.
+function dividingLineage(origin,targets,progress,fill,burst=false,receptor=false){
+const p=clamp(progress),targetCenter=centroid(targets),center=[mix(origin[0],targetCenter[0],p),mix(origin[1],targetCenter[1],p)];
+const positions=targets.map(t=>[t[0]-targetCenter[0],t[1]-targetCenter[1]]);
+function grow(points,depth){const c=centroid(points);if(points.length===1){cell(center[0]+c[0],center[1]+c[1],30,fill);return}
+const start=burst?.35+depth*.1:.15+depth*.19,split=ease((p-start)/(burst?.095:.17));if(split<=0){cell(center[0]+c[0],center[1]+c[1],30,fill,receptor&&depth===0);return}
+const mid=Math.ceil(points.length/2),groups=[points.slice(0,mid),points.slice(mid)];
+if(split<1){groups.forEach(g=>{const child=centroid(g);cell(center[0]+mix(c[0],child[0],split),center[1]+mix(c[1],child[1],split),30,fill)})}else groups.forEach(g=>grow(g,depth+1));}
+grow(positions,0);
+}
+function burstLineage(origin,targets,progress,fill){
+const p=clamp(progress),targetCenter=centroid(targets),center=[mix(origin[0],targetCenter[0],p),mix(origin[1],targetCenter[1],p)];
+if(p<.5){cell(...center,30,fill);return}
+const expansion=ease((p-.5)/.14);
+targets.forEach(t=>cell(center[0]+(t[0]-targetCenter[0])*expansion,center[1]+(t[1]-targetCenter[1])*expansion,30,fill));
+}
+function travel(a,b,p,bend=0){const t=ease(p);return [mix(a[0],b[0],t),mix(a[1],b[1],t)-Math.sin(Math.PI*t)*bend]}
+function draw(time){ctx.clearRect(0,0,1920,1080);ctx.fillStyle='white';ctx.fillRect(0,0,1920,1080);let k=spec.stages.findIndex(s=>time<s.end);if(k<0)k=3;const s=spec.stages[k],u=clamp((time-s.start)/(s.end-s.start)),C=spec.colors;
+text('Three routes to secondary germinal centers',80,88,44);text(s.name,80,151,37);text(s.description,80,1020,27);
+pool.forEach(p=>cell(...p,29,C.naive,true));
+[610,632,654].forEach(y=>{ctx.fillStyle='#222';ctx.beginPath();ctx.arc(180,y,3.5,0,Math.PI*2);ctx.fill()});
+// Sample the antigen-specific cell once; its source position remains occupied.
+const sourceFill=k===0&&u<.08?C.selected:k===3?color(C.naive,C.variantNaive,ease((u-.18)/.08)):C.naive;
+cell(...selectedNaive,29,sourceFill,true);
+text('Naïve B cells',100,230,29);text('Primary GC',620,435,31,'#222','center');
+if(k===0){const p=clamp((u-.08)/.56);if(p>0)dividingLineage(selectedNaive,primary,p,color(C.selected,C.primary,ease((u-.15)/.48)),false,true);syringe(365,490,'#888');arrow(320,570,455,570);if(u>.65){const v=ease((u-.65)/.25);mem.forEach((target,i)=>{const pos=travel(primary[i+3],target,v,30);cell(...pos,29,C.memory)});text('Memory B cells',950,215,29,'#222','center')}return}
+primary.forEach(p=>cell(...p,30,C.primary));
+const memoryProgress=clamp((u-.12-15*.016)/.48);
+mem.forEach((p,i)=>{if(k===1&&i===1&&memoryProgress>0)return;cell(...p,29,C.memory)});text('Memory B cells',950,215,29,'#222','center');
+const targetLabel=k===1?'New secondary GC':'Expanded secondary GC';text(targetLabel,1400,340,31,'#222','center');syringe(950,380,k===3?C.blue:'#888');
+if(k===1){secondary.forEach((target,i)=>{const prog=clamp((u-.12-i*.016)/.48);if(prog<=0)return;const origin=i===15?mem[1]:pool[i%3],pos=travel(origin,target,prog,i===15?45:175);cell(...pos,30,i===15?C.memory:C.naive,false,Math.min(1,prog*5))})}
+if(k===2||k===3){
+const inheritedIndices=k===2?[8,9,10,11,12,13,14,15]:[9,10,11,13,14,15];
+const otherIndices=Array.from({length:16},(_,i)=>i).filter(i=>!inheritedIndices.includes(i));
+const p=clamp((u-.08)/.76),targetFill=k===2?C.burst:C.variantPrimary,fill=color(C.primary,targetFill,ease((u-.12)/.7));
+burstLineage(primary[5],inheritedIndices.map(i=>secondary[i]),p,fill);
+if(k===2){otherIndices.forEach((i,j)=>{const progress=clamp((u-.18-j*.018)/.57);if(progress<=0)return;const pos=travel(pool[j%3],secondary[i],progress,170);cell(...pos,30,C.naive,false,Math.min(1,progress*5))})}
+else if(u>.31){const progress=clamp((u-.31)/.58);dividingLineage(variantNaive,otherIndices.map(i=>secondary[i]),progress,C.variantNaive)}
+}
+const labels=k===1?[['Naïve-derived',C.naive],['Memory-derived',C.memory]]:k===2?[['Primary GC-derived',C.burst],['Naïve-derived',C.naive]]:[['Primary GC-derived',C.variantPrimary],['De novo, variant-reactive',C.variantNaive]];labels.forEach(([label,fill],i)=>{cell(1195,825+i*60,15,fill);text(label,1225,833+i*60,27)});
+}
+let time=0,playing=false,previous=0,raf;const play=document.getElementById('play'),seek=document.getElementById('seek'),status=document.getElementById('time');
+function update(){draw(time);seek.value=time;status.textContent=time.toFixed(1)+' / '+spec.duration+' s';document.querySelectorAll('[data-stage]').forEach((b,i)=>b.setAttribute('aria-pressed',time>=spec.stages[i].start&&time<spec.stages[i].end))}
+function loop(t){if(playing){if(previous)time+=(t-previous)/1000;if(time>=spec.duration){time=spec.duration-.001;playing=false;play.textContent='Play'}previous=t;update();raf=requestAnimationFrame(loop)}}
+play.onclick=()=>{playing=!playing;play.textContent=playing?'Pause':'Play';previous=0;if(playing){if(time>=spec.duration-.01)time=0;raf=requestAnimationFrame(loop)}};seek.oninput=()=>{time=+seek.value;previous=0;update()};document.getElementById('restart').onclick=()=>{time=0;previous=0;update()};document.querySelectorAll('[data-stage]').forEach((b,i)=>b.onclick=()=>{time=spec.stages[i].start+.001;previous=0;update()});document.getElementById('fullscreen').onclick=()=>canvas.requestFullscreen?.();window.drawAt=t=>{playing=false;time=t;update()};update();
+</script></body></html>
