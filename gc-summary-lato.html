@@ -35,6 +35,10 @@ const radius=mix(33/Math.sqrt(targets.length),33,ease(growth));
 ctx.save();ctx.strokeStyle='#555';ctx.lineWidth=1.5;ctx.fillStyle=fill;
 positions.forEach(([x,y])=>{ctx.beginPath();ctx.arc(x,y,radius,0,Math.PI*2);ctx.stroke()});
 positions.forEach(([x,y])=>{ctx.beginPath();ctx.arc(x,y,radius,0,Math.PI*2);ctx.fill()});
+// Restore complete cell outlines as the burst settles into separate cells.
+ctx.save();ctx.globalAlpha*=ease((growth-.80)/.20);
+positions.forEach(([x,y])=>{ctx.beginPath();ctx.arc(x,y,radius,0,Math.PI*2);ctx.stroke()});
+ctx.restore();
 // Retain the single founder silhouette until its daughters fill the center.
 if(growth<.20){ctx.globalAlpha*=1-ease(growth/.20);cell(...center,30,fill)}
 ctx.restore();
